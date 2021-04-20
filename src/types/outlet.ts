@@ -3,15 +3,15 @@ import { addSupportedType, queryResponse, syncResponse } from '../common';
 
 addSupportedType({
     type: ScryptedDeviceType.Outlet,
-    probe: async (device) => {
-        if (!device.interfaces.includes(ScryptedInterface.OnOff))
-            return;
-    
+    probe(device) {
+        return device.interfaces.includes(ScryptedInterface.OnOff);
+    },
+    async getSyncResponse(device) {
         const ret = syncResponse(device, 'action.devices.types.OUTLET');
         ret.traits.push('action.devices.traits.OnOff');
         return ret;
     },
-    query: async (device: ScryptedDevice & OnOff) => {
+    async query(device: ScryptedDevice & OnOff) {
         const ret = queryResponse(device);
         ret.on = device.on;
         return ret;

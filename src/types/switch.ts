@@ -3,10 +3,10 @@ import { addSupportedType, queryResponse, syncResponse } from '../common';
 
 addSupportedType({
     type: ScryptedDeviceType.Switch,
-    probe: async (device) => {
-        if (!device.interfaces.includes(ScryptedInterface.OnOff))
-            return;
-
+    probe(device) {
+        return device.interfaces.includes(ScryptedInterface.OnOff);
+    },
+    async getSyncResponse(device) {
         const ret = syncResponse(device, 'action.devices.types.SWITCH');
         ret.traits.push('action.devices.traits.OnOff');
 
@@ -14,7 +14,7 @@ addSupportedType({
             ret.traits.push('action.devices.traits.Brightness');
         return ret;
     },
-    query: async (device: ScryptedDevice & OnOff & Brightness) => {
+    async query(device: ScryptedDevice & OnOff & Brightness) {
         const ret = queryResponse(device);
         ret.on = device.on;
         if (device.interfaces.includes(ScryptedInterface.Brightness))

@@ -3,10 +3,10 @@ import { addSupportedType, queryResponse, syncResponse } from '../common';
 
 addSupportedType({
     type: ScryptedDeviceType.Camera,
-    probe: async (device) => {
-        if (!device.interfaces.includes(ScryptedInterface.VideoCamera))
-            return;
-
+    probe(device) {
+        return device.interfaces.includes(ScryptedInterface.VideoCamera);
+    },
+    async getSyncResponse(device) {
         const ret = syncResponse(device, 'action.devices.types.CAMERA');
         ret.traits.push('action.devices.traits.CameraStream');
         ret.attributes = {
@@ -18,7 +18,7 @@ addSupportedType({
         }
         return ret;
     },
-    query: async (device: ScryptedDevice) => {
+    async query(device: ScryptedDevice) {
         const ret = queryResponse(device);
         return ret;
     },

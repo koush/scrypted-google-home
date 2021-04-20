@@ -3,10 +3,10 @@ import { addSupportedType, queryResponse, syncResponse } from '../common';
 
 addSupportedType({
     type: ScryptedDeviceType.Light,
-    probe: async (device) => {
-        if (!device.interfaces.includes(ScryptedInterface.OnOff))
-            return;
-    
+    probe(device) {
+        return device.interfaces.includes(ScryptedInterface.OnOff);
+    },
+    async getSyncResponse(device: ScryptedDevice & ColorSettingTemperature) {
         const ret = syncResponse(device, 'action.devices.types.LIGHT');
         ret.traits.push('action.devices.traits.OnOff');
         
@@ -25,14 +25,14 @@ addSupportedType({
 
             if (device.interfaces.includes(ScryptedInterface.ColorSettingTemperature)) {
                 ret.attributes.colorTemperatureRange = {
-                    temperatureMinK: await (device as ColorSettingTemperature).getTemperatureMinK(),
-                    temperatureMaxK: await (device as ColorSettingTemperature).getTemperatureMaxK(),
+                    temperatureMinK: await device.getTemperatureMinK(),
+                    temperatureMaxK: await device.getTemperatureMaxK(),
                 };
             }
         }
         return ret;
     },
-    query: async (device: ScryptedDevice & OnOff & Brightness & ColorSettingHsv & ColorSettingRgb & ColorSettingTemperature) => {
+    async query(device: ScryptedDevice & OnOff & Brightness & ColorSettingHsv & ColorSettingRgb & ColorSettingTemperature) {
         const ret = queryResponse(device);
         ret.on = device.on;
         if (device.interfaces.includes(ScryptedInterface.Brightness))

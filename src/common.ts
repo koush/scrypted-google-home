@@ -4,9 +4,15 @@ import { SmartHomeV1ExecuteResponseCommands, SmartHomeV1SyncDevices } from 'acti
 
 const { systemManager } = sdk;
 
+export interface DummyDevice {
+    interfaces?: string[];
+    type?: ScryptedDeviceType;
+}
+
 interface SupportedType {
     type: ScryptedDeviceType;
-    probe: (device: ScryptedDevice & any) => Promise<SmartHomeV1SyncDevices | undefined>;
+    probe(device: DummyDevice): boolean;
+    getSyncResponse: (device: ScryptedDevice & any) => Promise<SmartHomeV1SyncDevices>;
     query: (device: ScryptedDevice & any) => Promise<any>;
 }
 

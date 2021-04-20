@@ -1,13 +1,11 @@
-import { ColorSettingTemperature, EngineIOHandler, HttpRequest, HttpRequestHandler, HttpResponse, Refresh, RTCAVMessage, ScryptedDevice, ScryptedDeviceBase, ScryptedDeviceType, ScryptedInterface, ScryptedMimeTypes, VideoCamera } from '@scrypted/sdk';
+import { EngineIOHandler, HttpRequest, HttpRequestHandler, HttpResponse, MixinProvider, Refresh, ScryptedDevice, ScryptedDeviceBase, ScryptedDeviceType, ScryptedInterface, ScryptedMimeTypes } from '@scrypted/sdk';
 import sdk from '@scrypted/sdk';
-import { SmartHomeV1DisconnectRequest, SmartHomeV1DisconnectResponse, SmartHomeV1ExecuteRequest, SmartHomeV1ExecuteResponse, SmartHomeV1ExecuteResponseCommands, SmartHomeV1QueryRequest, SmartHomeV1QueryResponse, SmartHomeV1ReportStateRequest, SmartHomeV1SyncDevices, SmartHomeV1SyncRequest, SmartHomeV1SyncResponse } from 'actions-on-google/dist/service/smarthome/api/v1';
+import { SmartHomeV1DisconnectRequest, SmartHomeV1DisconnectResponse, SmartHomeV1ExecuteRequest, SmartHomeV1ExecuteResponse, SmartHomeV1ExecuteResponseCommands, SmartHomeV1QueryRequest, SmartHomeV1QueryResponse, SmartHomeV1ReportStateRequest, SmartHomeV1SyncRequest, SmartHomeV1SyncResponse } from 'actions-on-google/dist/service/smarthome/api/v1';
 import { smarthome } from 'actions-on-google/dist/service/smarthome';
 import { Headers } from 'actions-on-google/dist/framework';
 import { supportedTypes } from './common';
 import axios from 'axios';
 import throttle from 'lodash/throttle';
-import Url from 'url-parse';
-import qs from 'query-string';
 
 import './types';
 import './commands';
@@ -16,6 +14,7 @@ import { commandHandlers } from './handlers';
 import { canAccess } from './commands/camerastream';
 
 const { systemManager, mediaManager } = sdk;
+
 
 function uuidv4() {
     return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
@@ -32,15 +31,9 @@ function parseJwt(jwt: string) {
     }
 }
 
-function isSyncable(device: ScryptedDevice): boolean {
-    if (device.metadata?.['syncWithIntegrations'] === false)
-        return false;
-    if (device.metadata?.['syncWithGoogleHome'] === false)
-        return false;
-    return true;
-}
+const includeToken = 3;
 
-class GoogleHome extends ScryptedDeviceBase implements HttpRequestHandler, EngineIOHandler {
+class GoogleHome extends ScryptedDeviceBase implements HttpRequestHandler, EngineIOHandler, MixinProvider {
     linkTracker = localStorage.getItem('linkTracker');
     agentUserId = localStorage.getItem('agentUserId');
     app = smarthome({
@@ -48,10 +41,14 @@ class GoogleHome extends ScryptedDeviceBase implements HttpRequestHandler, Engin
     });
     reportQueue = new Set<string>();
     reportStateThrottled = throttle(() => this.reportState(), 2000);
+    plugins: Promise<any>;
+    defaultIncluded: any;
 
     constructor() {
         super();
 
+        // the tracker tracks whether this device has been reported in a sync request payload.
+        // this is because reporting too many devices in the initial sync fails upstream at google.
         if (!this.linkTracker) {
             this.linkTracker = Math.random().toString();
             localStorage.setItem('linkTracker', this.linkTracker);
@@ -60,6 +57,13 @@ class GoogleHome extends ScryptedDeviceBase implements HttpRequestHandler, Engin
         if (!this.agentUserId) {
             this.agentUserId = uuidv4();
             localStorage.setItem('agentUserId', this.agentUserId);
+        }
+
+        try {
+            this.defaultIncluded = JSON.parse(localStorage.getItem('defaultIncluded'));
+        }
+        catch (e) {
+            this.defaultIncluded = {};
         }
 
         this.app.onSync(this.onSync.bind(this));
@@ -71,6 +75,38 @@ class GoogleHome extends ScryptedDeviceBase implements HttpRequestHandler, Engin
             if (source)
                 this.queueReportState(source);
         });
+
+        this.plugins = systemManager.getComponent('plugins');
+    }
+
+    async isSyncable(device: ScryptedDevice): Promise<boolean> {
+        const plugins = await this.plugins;
+        const mixins = await plugins.getMixins(device.id);
+        if (mixins.includes(this.id))
+            return true;
+
+        if (this.defaultIncluded[device.id] === includeToken)
+            return false;
+
+        mixins.push(this.id);
+        await plugins.setMixins(device.id, mixins);
+        this.defaultIncluded[device.id] = includeToken;
+        localStorage.setItem('defaultIncluded', JSON.stringify(this.defaultIncluded));
+        return true;
+    }
+
+    canMixin(type: ScryptedDeviceType, interfaces: string[]): string[] {
+        const supportedType = supportedTypes[type];
+        if (!supportedType?.probe({
+            type,
+            interfaces,
+        })) {
+            return;
+        }
+        return [];
+    }
+    getMixin(device: ScryptedDevice, deviceState: any) {
+        return device;
     }
 
     async onConnection(request: HttpRequest, webSocketUrl: string) {
@@ -99,12 +135,13 @@ class GoogleHome extends ScryptedDeviceBase implements HttpRequestHandler, Engin
         }
     }
 
-    queueReportState(device: ScryptedDevice) {
-        if (!isSyncable(device))
-            return;
-
+    async queueReportState(device: ScryptedDevice) {
         if (this.storage.getItem(`link-${device.id}`) !== this.linkTracker)
             return;
+
+        if (!await this.isSyncable(device))
+            return;
+
         this.reportQueue.add(device.id);
         this.reportStateThrottled();
     }
@@ -124,15 +161,13 @@ class GoogleHome extends ScryptedDeviceBase implements HttpRequestHandler, Engin
             const { type } = device;
             const supportedType = supportedTypes[type];
 
-            if (!supportedType)
+            if (!supportedType?.probe(device))
                 continue;
 
-            if (!isSyncable(device))
+            if (!await this.isSyncable(device))
                 continue;
 
-            const probe = await supportedType.probe(device);
-            if (!probe)
-                continue;
+            const probe = await supportedType.getSyncResponse(device);
 
             probe.roomHint = device.room;
             ret.payload.devices.push(probe);

@@ -3,16 +3,16 @@ import { addSupportedType, queryResponse, syncResponse } from '../common';
 
 addSupportedType({
     type: ScryptedDeviceType.Sensor,
-    probe: async (device) => {
-        if (!device.interfaces.includes(ScryptedInterface.BinarySensor))
-            return;
-    
+    probe(device) {
+        return device.interfaces.includes(ScryptedInterface.BinarySensor);
+    },
+    async getSyncResponse(device) {
         const ret = syncResponse(device, 'action.devices.types.DOOR');
         ret.traits.push('action.devices.traits.OpenClose');
         ret.attributes.queryOnlyOpenClose = true;
         return ret;
     },
-    query: async (device: ScryptedDevice & BinarySensor) => {
+    async query(device: ScryptedDevice & BinarySensor) {
         const ret = queryResponse(device);
         ret.openPercent = device.binaryState ? 100 : 0;
         return ret;

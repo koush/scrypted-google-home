@@ -5,3 +5,4 @@ import './startstop';
 import './dock';
 import './openclose';
 import './temperaturesetting';
+import './lockunlock';
