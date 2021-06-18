@@ -8,3 +8,4 @@ import './sensor';
 import './garage';
 import './thermostat';
 import './lock';
+import './fan';
