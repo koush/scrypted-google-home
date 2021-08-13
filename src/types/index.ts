@@ -9,3 +9,4 @@ import './garage';
 import './thermostat';
 import './lock';
 import './fan';
+import './sprinkler';
