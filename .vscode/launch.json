@@ -34,6 +34,17 @@
             "localRoot": "${workspaceFolder}/out",
             "remoteRoot": "/plugin/",
             "type": "pwa-node"
+        },
+        {
+            "type": "pwa-node",
+            "request": "launch",
+            "name": "Serve Local SDK",
+            "skipFiles": [
+                "<node_internals>/**"
+            ],
+            "cwd": "${workspaceFolder}/local-sdk-app",
+            "program": "${workspaceFolder}/local-sdk-app/serve.js",
+            "args": ["3000"]
         }
     ]
 }
