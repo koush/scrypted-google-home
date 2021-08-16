@@ -1,6 +1,6 @@
 import { Battery, ScryptedDevice, ScryptedDeviceType, ScryptedInterface } from '@scrypted/sdk';
 import sdk from '@scrypted/sdk';
-import { SmartHomeV1ExecuteResponseCommands, SmartHomeV1SyncDevices } from 'actions-on-google/dist/service/smarthome/api/v1';
+import type { SmartHomeV1ExecuteResponseCommands, SmartHomeV1SyncDevices } from 'actions-on-google/dist/service/smarthome/api/v1';
 
 const { systemManager } = sdk;
 
@@ -30,6 +30,11 @@ export function syncResponse(device: ScryptedDevice, type: string): SmartHomeV1S
             defaultNames: [],
             nicknames: [],
         },
+        otherDeviceIds: [
+            {
+                deviceId: device.id,
+            }
+        ],
         attributes: {},
         traits: [],
         type,

@@ -1,19 +1,22 @@
 import { EngineIOHandler, HttpRequest, HttpRequestHandler, HttpResponse, MixinProvider, Refresh, ScryptedDevice, ScryptedDeviceBase, ScryptedDeviceType, ScryptedInterface, ScryptedMimeTypes } from '@scrypted/sdk';
 import sdk from '@scrypted/sdk';
-import { SmartHomeV1DisconnectRequest, SmartHomeV1DisconnectResponse, SmartHomeV1ExecuteRequest, SmartHomeV1ExecuteResponse, SmartHomeV1ExecuteResponseCommands, SmartHomeV1QueryRequest, SmartHomeV1QueryResponse, SmartHomeV1ReportStateRequest, SmartHomeV1SyncRequest, SmartHomeV1SyncResponse } from 'actions-on-google/dist/service/smarthome/api/v1';
+import type { SmartHomeV1DisconnectRequest, SmartHomeV1DisconnectResponse, SmartHomeV1ExecuteRequest, SmartHomeV1ExecuteResponse, SmartHomeV1ExecuteResponseCommands, SmartHomeV1QueryRequest, SmartHomeV1QueryResponse, SmartHomeV1ReportStateRequest, SmartHomeV1SyncRequest, SmartHomeV1SyncResponse } from 'actions-on-google/dist/service/smarthome/api/v1';
 import { smarthome } from 'actions-on-google/dist/service/smarthome';
-import { Headers } from 'actions-on-google/dist/framework';
+import type { Headers } from 'actions-on-google/dist/framework';
 import { supportedTypes } from './common';
 import axios from 'axios';
 import throttle from 'lodash/throttle';
-
+import http from 'http';
 import './types';
 import './commands';
 
 import { commandHandlers } from './handlers';
 import { canAccess } from './commands/camerastream';
 
-const { systemManager, mediaManager } = sdk;
+import mdns from 'mdns';
+import {URL} from 'url';
+
+const { systemManager, mediaManager, endpointManager } = sdk;
 
 
 function uuidv4() {
@@ -43,6 +46,7 @@ class GoogleHome extends ScryptedDeviceBase implements HttpRequestHandler, Engin
     reportStateThrottled = throttle(() => this.reportState(), 2000);
     plugins: Promise<any>;
     defaultIncluded: any;
+    localEndpoint: http.Server;
 
     constructor() {
         super();
@@ -77,6 +81,20 @@ class GoogleHome extends ScryptedDeviceBase implements HttpRequestHandler, Engin
         });
 
         this.plugins = systemManager.getComponent('plugins');
+
+        this.localEndpoint = new http.Server((req, res) => {
+            this.log.i('got request');
+            res.writeHead(404);
+            res.end();
+        });
+        this.localEndpoint.listen(12080);
+
+        endpointManager.getInsecurePublicLocalEndpoint().then(endpoint => {
+            const url = new URL(endpoint);
+            this.log.i(endpoint);
+            const ad = mdns.createAdvertisement(mdns.tcp('scrypted-gh'), parseInt(url.port));
+            ad.start();
+        });
     }
 
     async isSyncable(device: ScryptedDevice): Promise<boolean> {
@@ -388,15 +406,30 @@ class GoogleHome extends ScryptedDeviceBase implements HttpRequestHandler, Engin
     }
 
     async onRequest(request: HttpRequest, response: HttpResponse): Promise<void> {
+        if (request.url.endsWith('/identify')) {
+            response.send('identify', {
+                code: 200,
+            });
+            return;
+        }
+
         this.log.i(request.body);
         const body = JSON.parse(request.body);
-        const result = await this.app.handler(body, request.headers as Headers);
-        const res = JSON.stringify(result.body);
-        this.log.i(res);
-        response.send(res, {
-            headers: result.headers,
-            code: result.status,
-        })
+        try {
+            const result = await this.app.handler(body, request.headers as Headers);
+            const res = JSON.stringify(result.body);
+            this.log.i(res);
+            response.send(res, {
+                headers: result.headers,
+                code: result.status,
+            });
+        }
+        catch (e) {
+            this.log.e(`request error ${e}`);
+            response.send(e.message, {
+                code: 500,
+            });
+        }
     }
 }
 
