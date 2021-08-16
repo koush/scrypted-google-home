@@ -27,6 +27,7 @@ app
         },
       },
     };
+    console.debug("IDENTIFY response:", response);
     return response;
   })
   .onReachableDevices(request => {
