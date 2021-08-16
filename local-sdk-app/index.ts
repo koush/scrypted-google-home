@@ -46,6 +46,7 @@ app
         devices: reachableDevices,
       },
     };
+    console.debug("REACHABLE_DEVICES response:", request);
     return response;
   })
   .onQuery(async (request) => {
