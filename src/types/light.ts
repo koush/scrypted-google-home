@@ -36,7 +36,7 @@ addSupportedType({
         const ret = queryResponse(device);
         ret.on = device.on;
         if (device.interfaces.includes(ScryptedInterface.Brightness))
-            ret.brightness = device.brightness;
+            ret.brightness = device.brightness || 0;
         if (device.interfaces.includes(ScryptedInterface.ColorSettingHsv)) {
             const {hsv} = device;
             ret.spectrumHsv = {
